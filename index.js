@@ -5,6 +5,7 @@ const inquirer = require("inquirer");
 const googleAuth = require("./src/google-auth");
 const { getAccounts, getWebProperties, getProfiles, getData } = require("./src/google-analytics");
 const { parse } = require("./src/caniuse-parser");
+const { metadata, getMetaData } = require("./src/metadata");
 
 inquirer.registerPrompt("datetime", require("inquirer-datepicker-prompt"));
 
@@ -12,6 +13,10 @@ const outputFilename = "browserslist-stats.json";
 
 googleAuth(oauth2Client => {
   let selectedProfile;
+  let selectedAccount;
+  let selectedProperty;
+  let selectedStartDate;
+  let selectedEndDate;
 
   getAccounts(oauth2Client)
     .then(accounts =>
@@ -27,7 +32,10 @@ googleAuth(oauth2Client => {
         },
       ])
     )
-    .then(({ account }) => getWebProperties(oauth2Client, account.id))
+    .then(({ account }) => {
+      selectedAccount = account
+      return getWebProperties(oauth2Client, account.id)
+    })
     .then(webProperties =>
       inquirer.prompt([
         {
@@ -41,7 +49,10 @@ googleAuth(oauth2Client => {
         },
       ])
     )
-    .then(({ webProperty }) => getProfiles(oauth2Client, webProperty.accountId, webProperty.id))
+    .then(({ webProperty }) => {
+      selectedProperty = webProperty;
+      return getProfiles(oauth2Client, webProperty.accountId, webProperty.id)
+    })
     .then(profiles =>
       inquirer.prompt([
         {
@@ -81,10 +92,17 @@ googleAuth(oauth2Client => {
         },
       ]);
     })
-    .then(({ startDate, endDate }) => getData(oauth2Client, selectedProfile.id, startDate, endDate))
+    .then(({ startDate, endDate }) => {
+      selectedStartDate = startDate
+      selectedEndDate = endDate
+      return getData(oauth2Client, selectedProfile.id, startDate, endDate)
+    })
     .then(parse)
     .then(stats => {
-      fs.writeFileSync(outputFilename, JSON.stringify(stats, null, 2));
+      console.log(stats)
+      const metadata = getMetaData({ selectedProfile, selectedProperty, selectedAccount, selectedStartDate, selectedEndDate })
+      const result = Object.assign({}, stats, metadata)
+      fs.writeFileSync(outputFilename, JSON.stringify(result, null, 2));
       console.log(`Success! Stats saved to '${outputFilename}'`);
       process.exit();
     })
